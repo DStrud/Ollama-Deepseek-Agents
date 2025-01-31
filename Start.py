@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import re
 import time
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -13,6 +14,11 @@ socketio = SocketIO(app, cors_allowed_origins="*")  # Enable WebSocket support
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "deepseek-r1:14b"
 MEMORY_FILE = "memory.json"
+
+def clean_response(response):
+    """Removes <think> tags and extra whitespace from model output."""
+    response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)  # Remove thoughts
+    return response.strip()  # Remove extra spaces
 
 # Load memory from JSON file
 def load_memory():
@@ -29,6 +35,13 @@ def save_memory(memory_data):
 # Initialize memory and messaging
 agent_memory = load_memory()
 message_queue = []
+
+def save_story_to_file(content):
+    """Saves the structured story content to a file."""
+    file_path = "story.txt"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.write(content)
+    print(f"Story saved to {file_path}")
 
 def send_message(sender, recipient, content):
     """Sends a message between agents and updates the UI via WebSocket."""
@@ -95,53 +108,68 @@ class Agent:
 # Define agents
 class PlannerAgent(Agent):
     def communicate(self, goal):
-        """The Planner breaks the task into steps and keeps agents on track."""
-        send_message("Planner", "Researcher", f"Please research: {goal}")
+        """Sends an initial task to the Researcher and keeps agents focused."""
+        send_message("Planner", "Researcher", f"Summarize key information about: {goal}")
 
-    def review_responses(self):
-        """Check if agent responses match the original task."""
-        messages = get_messages(self.name)  # Get messages sent to the Planner
+    def review_responses(self, goal):
+        """Checks if responses actually match the request."""
+        messages = get_messages(self.name)
 
         for message in messages:
             sender = message["from"]
             response = message["content"]
 
-            # Check if response actually answers the request
+            # Check if response is off-topic
             if self.is_off_topic(response):
-                send_message(self.name, sender, "Your response went off-topic. Please refocus on the main task.")
+                send_message(self.name, sender, f"Your response is off-topic. Refocus on the main goal: {goal}")
             else:
-                # If it's correct, send it to the next step
+                # Pass valid responses forward
                 if sender == "Researcher":
-                    send_message(self.name, "Writer", f"Use this research: {response}")
+                    send_message(self.name, "Writer", f"Use this research to structure a response: {response}")
                 elif sender == "Writer":
-                    send_message(self.name, "Reviewer", f"Review this document: {response}")
+                    send_message(self.name, "Reviewer", f"Review this document for accuracy: {response}")
 
     def is_off_topic(self, response):
-        """Simple check to see if the response is too broad or off-topic."""
-        # If response is way too long or contains speculative text, flag it
-        if len(response.split()) > 250 or "maybe" in response or "what if" in response:
+        """Detect if the response is wandering too much from the goal."""
+        if len(response.split()) > 150:  # Limit response size
             return True
+        if "maybe" in response or "story" in response or "imagine" in response:
+            return True  # Avoid speculation or storytelling
         return False
+
 
 class ResearcherAgent(Agent):
     def respond(self, task):
-        time.sleep(1)  # Simulate processing time
         memory = self.get_memory()
-        prompt = f"Your memory:\n{memory}\nResearch and summarize:\n{task}"
+        prompt = f"""
+        You are a researcher. Do NOT create a story or speculate. 
+        Summarize key facts about: {task}. Limit to 100 words.
+        """
         response = query_ollama(prompt)
+        response = clean_response(response)  # Remove <think> tags
         self.remember(f"Research: {response}")
-        send_message(self.name, "Writer", f"Here's the research: {response}")
+        send_message(self.name, "Writer", f"Here is the research: {response}")
         return response
+
 
 class WriterAgent(Agent):
     def respond(self, research_data):
-        time.sleep(1)  # Simulate processing time
         memory = self.get_memory()
-        prompt = f"Your memory:\n{memory}\nWrite a structured document:\n{research_data}"
+        prompt = f"""
+        You are a technical writer. Do NOT add new information or expand beyond the research given.
+        Structure the response clearly. Limit response to 150 words.
+        Research data:\n{research_data}
+        """
         response = query_ollama(prompt)
+        response = clean_response(response)  # Clean <think> tags
         self.remember(f"Draft: {response}")
-        send_message(self.name, "Reviewer", f"Please review this document: {response}")
+
+        # Save the response to a file
+        save_story_to_file(response)
+
+        send_message(self.name, "Reviewer", f"Review this document: {response}")
         return response
+
 
 class ReviewerAgent(Agent):
     def respond(self, draft):
@@ -165,7 +193,7 @@ def run_agents(goal):
     
     while message_queue:
         planner.communicate(goal)  # Pass the goal so it doesn't break
-        planner.review_responses()  # Check and correct responses if needed
+        planner.review_responses(goal)  # Pass the goal explicitly
         researcher.communicate()
         writer.communicate()
         reviewer.communicate()
