@@ -1,111 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Agent Chat</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-        }
-        h1 {
-            color: #333;
-            padding: 10px;
-        }
-        #chat-container {
-            width: 60%;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            overflow-y: auto;
-            max-height: 500px;
-        }
-        .message {
-            display: flex;
-            align-items: center;
-            margin: 10px 0;
-        }
-        .bubble {
-            padding: 10px 15px;
-            border-radius: 15px;
-            color: white;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-        .user .bubble { background-color: #007bff; text-align: left; }
-        .planner .bubble { background-color: #28a745; text-align: left; }
-        .researcher .bubble { background-color: #ffc107; text-align: left; }
-        .writer .bubble { background-color: #17a2b8; text-align: left; }
-        .reviewer .bubble { background-color: #dc3545; text-align: left; }
-        .bubble-container { width: 100%; display: flex; }
-        .user { justify-content: flex-end; }
-        .planner { justify-content: flex-start; }
-        .researcher { justify-content: flex-start; }
-        .writer { justify-content: flex-start; }
-        .reviewer { justify-content: flex-start; }
-        #input-container {
-            margin-top: 10px;
-        }
-        input {
-            width: 70%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        button {
-            padding: 10px 15px;
-            margin-left: 10px;
-            border: none;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: white;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-    </style>
+<html>
+  <head>
+    <title>Multi-Agent GPT Demo</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Multi-Agent GPT Demo</h1>
+    <input id="goal-input" type="text" placeholder="Enter your goal..." />
+    <button onclick="startAgents()">Start Agents</button>
+
+    <div id="messages"></div>
+
     <script>
-        var socket = io();
+      const socket = io();
 
-        function startAgents() {
-            let goal = document.getElementById("goal").value;
-            if (goal.trim() === "") return;
-            appendMessage("User", "You", goal);
-            socket.emit("start_agents", { goal: goal });
-        }
+      socket.on("connect", () => {
+        console.log("Connected to server");
+      });
 
-        socket.on("new_message", function(data) {
-            appendMessage(data.from, data.from, data.content);
-        });
+      socket.on("new_message", (data) => {
+        const msgDiv = document.getElementById("messages");
+        msgDiv.innerHTML += `<p><strong>${data.from} -> ${data.to}:</strong> ${data.content}</p>`;
+      });
 
-        function appendMessage(role, name, text) {
-            let chatContainer = document.getElementById("chat-container");
-            let messageDiv = document.createElement("div");
-            messageDiv.classList.add("message", role.toLowerCase());
-            messageDiv.innerHTML = `
-                <div class="bubble-container">
-                    <div class="bubble">${text}</div>
-                </div>
-            `;
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
+      socket.on("error", (data) => {
+        alert(data.error);
+      });
+
+      function startAgents() {
+        const goal = document.getElementById("goal-input").value;
+        socket.emit("start_agents", { goal });
+      }
     </script>
-</head>
-<body>
-    <h1>Multi-Agent Chat (Live Updates)</h1>
-    <div id="chat-container"></div>
-    <div id="input-container">
-        <input type="text" id="goal" placeholder="Enter a goal">
-        <button onclick="startAgents()">Start</button>
-    </div>
-</body>
+  </body>
 </html>

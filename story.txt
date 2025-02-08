@@ -1,3 +1,27 @@
-In a world where Earth’s surface is uninhabitable due to toxic air, humanity resides in sprawling underground bunkers—once cities beneath the earth. These bunkers now house millions, surviving under artificial light and relying on recycled resources. Rationing is strict, and trust among inhabitants is scarce.
+Here’s a concise Python script to check the weather in London using the OpenWeatherMap API:
 
-Power lies with the elites, who hoard water and food while others endure squalor. Despite this oppression, whispers of rebellion persist—coded messages hidden in shadows and a single flower grown illegally in a breacheshaft symbolize hope. Though the surface remains a distant memory, life underground continues to bloom with resilience and defiance.
+```python
+import requests
+
+api_key = input("Enter your OpenWeatherMap API key: ")
+city = "London"
+units = "metric"
+
+url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&units={units}&appid={api_key}"
+
+try:
+    response = requests.get(url)
+    data = response.json()
+    
+    if data["cod"] == 200:
+        print(f"Temperature: {data['main']['temp']}°C")
+        print(f"Weather condition: {data['weather'][0]['description']}")
+        print(f"Humidity: {data['main']['humidity']}%")
+        print(f"Wind speed: {data['wind']['speed']} km/h")
+    else:
+        print("Error:", data["message"])
+except requests.exceptions.RequestException as e:
+    print("Request failed:", str(e))
+```
+
+This script retrieves and displays current weather conditions in London, including temperature, humidity, wind speed, and weather description. It uses the OpenWeatherMap API, requiring an API key for authentication.

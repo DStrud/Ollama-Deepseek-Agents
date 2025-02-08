@@ -1,0 +1,6 @@
+flask
+flask-socketio
+requests
+simpleaudio
+soundfile
+numpy

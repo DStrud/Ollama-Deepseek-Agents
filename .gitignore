@@ -1,2 +1,5 @@
 
 memory.json
+/__pycache__
+output.wav
+templates/template.html
